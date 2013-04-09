@@ -120,6 +120,8 @@ def get(name, id):
             if '_id' in obj:
                 obj['_id'] = str(obj['_id'])
             rv['data'] = obj
+            rv['code'] = 200
+            rv['message'] = 'successful'
 
     except Exception, e:
         print e
