@@ -1,7 +1,6 @@
 from bottle import Bottle, run, template, install, request,response, route
-#from config import config
+from util.config import config
 
-#import util
 import time
 import parser
 
@@ -15,7 +14,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 
 import datetime
-from util import MyEncoder
+from ecommerce.eutil import *
 
 app = Bottle()
 
@@ -55,6 +54,7 @@ def update(name, id):
             del obj["_id"]
 
             obj["lastUpdateDate"] = datetime.datetime.utcnow()
+            obj["self"] = "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id)
             x = objects.update({'_id':obj_id}, {"$set": obj}, upsert=False)
             print "Update result:", 
             print x
@@ -84,6 +84,7 @@ def create(name):
     try:
         objects = db[name]
         req_json["creationDate"] = datetime.datetime.utcnow()
+        req_json["self"] = "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id)
         obj_id = objects.insert(req_json)
         response.status = 201
         response.location = '/ecommerce/%s/%s' % (name, obj_id) 
@@ -97,7 +98,7 @@ def create(name):
     return {'code': 201, 'message' : 'Created' , 'link': '/ecommerce/%s/%s' % (name, obj_id) }
 
 @app.get('/ecommerce/<name>/<id>')
-def get(name, id):
+def get_one(name, id):
 
     print "*** id = %s" % (id,)
 
@@ -113,12 +114,7 @@ def get(name, id):
             rv['code'] = 404
             rv['message'] = 'not found'
         else:
-            if 'lastUpdateDate' in obj:
-                obj['lastUpdateDate'] = obj['lastUpdateDate'].isoformat()
-            if 'creationDate' in obj:
-                obj['creationDate'] = obj['creationDate'].isoformat()
-            if '_id' in obj:
-                obj['_id'] = str(obj['_id'])
+            obj = sanitize(obj)
             rv['data'] = obj
             rv['code'] = 200
             rv['message'] = 'successful'
@@ -128,9 +124,41 @@ def get(name, id):
         rv['code'] = 400
 
     response.status = rv['code']
-    response.location = rv['link']
     print rv
-    return rv['data']
+    if rv['code'] == 200: return rv['data']
+    else: return None
+
+@app.get('/ecommerce/<name>')
+def get_all(name):
+
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "/ecommerce/%s" % (name) }
+
+    try:
+    
+        objects = db[name]
+        objs = list(objects.find())
+
+        if objs is None or len(objs) == 0:
+            rv['code'] = 200
+            rv['message'] = 'no content'
+        else:
+            for obj in objs:
+                sanitize(obj)
+
+            rv['data'] = {name : objs }
+            rv['code'] = 200
+            rv['message'] = 'successful'
+
+    except Exception, e:
+        print e
+        rv['code'] = 400
+
+    print rv
+    response.status = rv['code']
+    if rv['code'] == 200: 
+        return rv['data']
+    else: return None
+
 
 @app.put('/ecommerce/<name>/<id>')
 def replace(name, id):
@@ -160,6 +188,7 @@ def replace(name, id):
                 req_json["creationDate"] = obj['creationDate']
                 req_json["_id"] = obj_id
                 req_json["lastUpdateDate"] = datetime.datetime.utcnow()
+                req_json["self"] = "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id)
                 x = objects.update({'_id':obj_id}, req_json, upsert=False)
                 print "**** new id",
                 print x
@@ -175,3 +204,34 @@ def replace(name, id):
 
     response.status = rv['code']
     return rv
+
+@app.delete('/ecommerce/<name>/<id>')
+def delete(name, id):
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "/ecommerce/%s/%s" % (name, id) }
+
+    try:
+        objects = db[name]
+        obj_id = ObjectId(id)
+        qry = {"_id":obj_id}
+        obj = objects.find_one(qry)
+
+        if obj is None:
+            rv['code'] = 404
+            rv['message'] = 'not found'
+        else:
+            try:
+                x = objects.remove(qry)
+                rv['code'] = 200
+                rv['message'] = 'successfully deleted'
+            except Exception, e:
+                print e
+                rv['message'] = 'Error while deleting'
+
+    except Exception, e:
+        print e
+        response.status = 400
+        rv['message'] = 'Error while reading'
+
+    response.status = rv['code']
+    return rv
+

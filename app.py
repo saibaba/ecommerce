@@ -6,9 +6,9 @@ from bottle import Bottle, run, ServerAdapter
 
 from multiprocessing import Process, current_process, cpu_count
 
-#from config import configure, config
+from util.config import configure, config
 # do immediately so that other modules can see config data
-#configure(sys.argv)
+configure(sys.argv)
 
 from ecommerce import ecapp
 #from auth import CloudAuthMiddleware
