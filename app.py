@@ -11,6 +11,7 @@ from util.config import configure, config
 configure(sys.argv)
 
 from ecommerce import ecapp
+from ecommerce import eccode
 #from auth import CloudAuthMiddleware
 
 class GEventServerAdapter(ServerAdapter):
@@ -22,6 +23,7 @@ class GEventServerAdapter(ServerAdapter):
 main_app = Bottle()
 
 main_app.merge(ecapp.app)
+main_app.merge(eccode.app)
 
 @main_app.get('/')
 def index():

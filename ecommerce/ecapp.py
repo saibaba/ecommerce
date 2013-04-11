@@ -16,6 +16,8 @@ from bson.objectid import ObjectId
 import datetime
 from ecommerce.eutil import *
 
+from trigger import BeforePOST
+
 app = Bottle()
 
 client = MongoClient()
@@ -74,6 +76,7 @@ def create(name):
 
     try:
         req_json = request.json
+        req_raw = request.body.getvalue()
         if req_json is None:
             raise Exception("Empty json or no proper content-type to recognize as json")
     except Exception, e:
@@ -83,9 +86,19 @@ def create(name):
 
     try:
         objects = db[name]
+
+        # if there is a trigger, fire it
+        print "Invoking trigger"
+        trigger = BeforePOST(req_raw, db, name)
+        trigger.execute()
+        if not trigger.ok:
+            raise Exception(trigger.message)
         req_json["creationDate"] = datetime.datetime.utcnow()
-        req_json["self"] = "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id)
+
         obj_id = objects.insert(req_json)
+        obj = objects.find_one({"_id":obj_id})
+        obj["self"] = "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, str(obj_id))
+        x = objects.update({'_id':obj_id}, obj, upsert=False)
         response.status = 201
         response.location = '/ecommerce/%s/%s' % (name, obj_id) 
 
@@ -141,6 +154,7 @@ def get_all(name):
         if objs is None or len(objs) == 0:
             rv['code'] = 200
             rv['message'] = 'no content'
+            rv['data'] = None
         else:
             for obj in objs:
                 sanitize(obj)
@@ -155,9 +169,7 @@ def get_all(name):
 
     print rv
     response.status = rv['code']
-    if rv['code'] == 200: 
-        return rv['data']
-    else: return None
+    return rv['data']
 
 
 @app.put('/ecommerce/<name>/<id>')
