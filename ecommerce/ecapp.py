@@ -20,7 +20,7 @@ from trigger import BeforePOST
 
 app = Bottle()
 
-client = MongoClient()
+client = MongoClient(config.get('objectstore', 'mongo_host'), int(config.get('objectstore', 'mongo_port')))
 db = client.ecommerce
 
 @app.route('/ecommerce/<name>/<id>', 'PATCH')
