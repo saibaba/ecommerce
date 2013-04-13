@@ -10,75 +10,75 @@ import sys
 import traceback
 import logging
 
-from pymongo import MongoClient
 from bson.objectid import ObjectId
 
 import datetime
 from ecommerce.eutil import *
 
-app = Bottle()
+from storage import mongo
 
-client = MongoClient()
-db = client.ecommerce
+app = Bottle()
 
 @app.put('/ecommerce/<name>/triggers/beforePOST')
 def create(name):
 
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/triggers/beforePOST" % (config.get("app", "prefix"), name, ), 'data': None }
+
+    code = None
     try:
         if request.headers['CONTENT_TYPE'] != 'application/javascript' :
             raise Exception("Content type must be application/javascript")
-        code = request.body
+        code = request.body.getvalue()
+
         if code is None:
             raise Exception("Empty code or no proper content-type to recognize as json")
     except Exception, e:
         response.status = 400
-        status = "syntaxError"
-        return {'code': 400, 'message' : 'Could not get code' }
+        rv['data'] =  {'code': 400, 'message' : 'Could not retrieve script: %s' % (str(e),)  }
 
-    try:
-        objects = db[name + "_triggers"]
-        content = {}
-        content["creationDate"] = datetime.datetime.utcnow()
-        content["type"] = "beforePOST"
-        content["code"] = code.getvalue()
-        obj = objects.remove({"type":"beforePOST"})
-        obj_id = objects.insert(content)
-        response.status = 201
-        response.location = '/ecommerce/%s/triggers/beforePOST' % (name,) 
+    if code is not None:   
+        try:
+            objects = mongo.db[name + "_triggers"]
+            content = {}
+            content["creationDate"] = datetime.datetime.utcnow()
+            content["type"] = "beforePOST"
+            content["code"] = code
+            obj = objects.remove({"type":"beforePOST"})
+            obj_id = objects.insert(content)
+            rv['code'] = 201
+            rv['link'] = '%s/ecommerce/%s/triggers/beforePOST' % (config.get("app", "prefix"), name,) 
+            rv['data']  = { 'code' : 201, 'message' : 'Created' }
 
-    except Exception, e:
-        print e
-        response.status = 400
-        status = "unknownError"
-        return {'code': 400, 'message' : 'Error: %s' % (str(e)) }
+        except Exception, e:
+            rv['code'] = 400
+            rv['data'] = {'code': 400, 'message' : 'Error: %s' % (str(e)) }
 
-    return {'code': 201, 'message' : 'Created' , 'link': '/ecommerce/%s/triggers/beforePOST' % (name,) }
+    response.status = rv['code']
+    response.location  = rv['link']
+    return rv['data']
 
 @app.get('/ecommerce/<name>/triggers/beforePOST')
-def get_bi(name):
+def get_bp(name):
 
-    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "/ecommerce/%s/triggers/beforePOST" % (name, ), 'data': None }
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/triggers/beforePOST" % (config.get("app", "prefix"), name, ), 'data': None }
 
     try:
     
-        objects = db[name +"_triggers"]
-        obj_id = ObjectId(id)
+        objects = mongo.db[name +"_triggers"]
         obj = objects.find_one({"type":"beforePOST"})
 
         if obj is None:
             rv['code'] = 404
-            rv['message'] = 'not found'
+            rv['data'] = { 'code' : 404, 'message': 'not found' }
         else:
             obj = sanitize(obj)
-            rv['data'] = obj
+            obj["self"] = "%s/ecommerce/%s/triggers/beforePOST" % (config.get("app", "prefix"), name)
             rv['code'] = 200
-            rv['message'] = 'successful'
+            rv['data'] = obj
 
     except Exception, e:
-        print e
         rv['code'] = 400
+        rv['data'] = { 'code': 400, 'message' : 'Error: %s' % (str(e), ) }
 
     response.status = rv['code']
-    print rv
     return rv['data']
-

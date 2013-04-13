@@ -28,7 +28,7 @@ def update(name, id):
 
     print "*** id = %s" % (id,)
 
-    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "/ecommerce/%s/%s" % (name, id) }
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id) }
 
     try:
         req_json = request.json
@@ -108,14 +108,14 @@ def create(name):
         status = "unknownError"
         return {'code': 400, 'message' : 'Error: %s' % (str(e)) }
 
-    return {'code': 201, 'message' : 'Created' , 'link': '/ecommerce/%s/%s' % (name, obj_id) }
+    return {'code': 201, 'message' : 'Created' , 'link': '%s/ecommerce/%s/%s' % (config.get("app", "prefix"), name, obj_id) }
 
 @app.get('/ecommerce/<name>/<id>')
 def get_one(name, id):
 
     print "*** id = %s" % (id,)
 
-    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "/ecommerce/%s/%s" % (name, id) }
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id) }
 
     try:
     
@@ -144,7 +144,7 @@ def get_one(name, id):
 @app.get('/ecommerce/<name>')
 def get_all(name):
 
-    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "/ecommerce/%s" % (name) }
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s" % (config.get("app", "prefix"), name) }
 
     try:
     
@@ -177,7 +177,7 @@ def replace(name, id):
 
     print "*** id = %s" % (id,)
 
-    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "/ecommerce/%s/%s" % (name, id) }
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id) }
 
     try:
         req_json = request.json
@@ -219,7 +219,7 @@ def replace(name, id):
 
 @app.delete('/ecommerce/<name>/<id>')
 def delete(name, id):
-    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "/ecommerce/%s/%s" % (name, id) }
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id) }
 
     try:
         objects = db[name]
