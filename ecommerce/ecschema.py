@@ -19,15 +19,15 @@ from storage import mongo
 
 app = Bottle()
 
-@app.put('/ecommerce/<name>/metadata/triggers/beforePOST')
-def create(name):
+@app.put('/ecommerce/<name>/metadata/schema')
+def create_schema(name):
 
-    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/metadata/triggers/beforePOST" % (config.get("app", "prefix"), name, ), 'data': None }
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/metadata/schema" % (config.get("app", "prefix"), name, ), 'data': None }
 
     code = None
     try:
-        if request.headers['CONTENT_TYPE'] != 'application/javascript' :
-            raise Exception("Content type must be application/javascript")
+        if request.headers['CONTENT_TYPE'] != 'application/json' :
+            raise Exception("Content type must be application/json")
         code = request.body.getvalue()
 
         if code is None:
@@ -38,15 +38,15 @@ def create(name):
 
     if code is not None:   
         try:
-            objects = mongo.db[name + "_triggers"]
+            objects = mongo.db[name + "_schema"]
             content = {}
             content["creationDate"] = datetime.datetime.utcnow()
-            content["type"] = "beforePOST"
-            content["code"] = code
-            obj = objects.remove({"type":"beforePOST"})
+            content["schema"] = code
+            content["type"] = "schema"
+            obj = objects.remove({"type":"schema"})
             obj_id = objects.insert(content)
             rv['code'] = 201
-            rv['link'] = '%s/ecommerce/%s/metadata/triggers/beforePOST' % (config.get("app", "prefix"), name,) 
+            rv['link'] = '%s/ecommerce/%s/metadata/schema' % (config.get("app", "prefix"), name,) 
             rv['data']  = { 'code' : 201, 'message' : 'Created' }
 
         except Exception, e:
@@ -57,22 +57,22 @@ def create(name):
     response.location  = rv['link']
     return rv['data']
 
-@app.get('/ecommerce/<name>/metadata/triggers/beforePOST')
-def get_bp(name):
+@app.get('/ecommerce/<name>/metadata/schema')
+def get_schema(name):
 
-    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/metadata/triggers/beforePOST" % (config.get("app", "prefix"), name, ), 'data': None }
+    rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/metadata/schema" % (config.get("app", "prefix"), name, ), 'data': None }
 
     try:
     
-        objects = mongo.db[name +"_triggers"]
-        obj = objects.find_one({"type":"beforePOST"})
+        objects = mongo.db[name +"_schema"]
+        obj = objects.find_one({"type":"schema"})
 
         if obj is None:
             rv['code'] = 404
             rv['data'] = { 'code' : 404, 'message': 'not found' }
         else:
             obj = sanitize(obj)
-            obj["self"] = "%s/ecommerce/%s/metadata/triggers/beforePOST" % (config.get("app", "prefix"), name)
+            obj["self"] = "%s/ecommerce/%s/metadata/schema" % (config.get("app", "prefix"), name)
             rv['code'] = 200
             rv['data'] = obj
 

@@ -12,6 +12,7 @@ configure(sys.argv)
 
 from ecommerce import ecapp
 from ecommerce import eccode
+from ecommerce import ecschema
 #from auth import CloudAuthMiddleware
 
 class GEventServerAdapter(ServerAdapter):
@@ -24,6 +25,7 @@ main_app = Bottle()
 
 main_app.merge(ecapp.app)
 main_app.merge(eccode.app)
+main_app.merge(ecschema.app)
 
 @main_app.get('/')
 def index():

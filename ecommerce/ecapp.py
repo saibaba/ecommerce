@@ -17,11 +17,37 @@ import datetime
 from ecommerce.eutil import *
 
 from trigger import BeforePOST
+from validate import Validator
 
 app = Bottle()
 
 client = MongoClient(config.get('objectstore', 'mongo_host'), int(config.get('objectstore', 'mongo_port')))
 db = client.ecommerce
+
+def json_content_type(req, rv):
+    if req.headers['CONTENT_TYPE'] != 'application/json':
+        rv['code'] = 415 
+        rv['message'] = 'Unsupported Media Type %s : Expecting %s'  % (req.headers['CONTENT_TYPE'], "application/json")
+        return False
+    else:
+        return  True
+
+def empty_content(req, rv):
+    if req.json is None:
+        rv['code'] = 400 
+        rv['message'] = 'Bad Request : Expecting non empty json'
+        return False
+    else:
+        return  True
+
+def get(collname, id, rv):
+    objects = db[collname]
+    obj_id = ObjectId(id)
+    obj = objects.find_one({"_id": obj_id})
+    if obj is None:
+        rv['code'] = 404
+        rv['message'] = 'not found'
+    return obj
 
 @app.route('/ecommerce/<name>/<id>', 'PATCH')
 def update(name, id):
@@ -30,33 +56,26 @@ def update(name, id):
 
     rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id) }
 
-    try:
-        req_json = request.json
-        if req_json is None:
-            raise Exception("Empty json or no proper content-type to recognize as json")
-    except Exception, e:
-        rv['message'] = 'Could not parse json'
-        response.status = rv['code']
-        return rv
+    if (not json_content_type(request, rv))  or  (not empty_content(request, rv)): return rv
+
+    req_json = request.json
+
+    if (not Validator(req_json, db, name).valid(rv)): return rv
 
     try:
-    
-        objects = db[name]
-        obj_id = ObjectId(id)
-        obj = objects.find_one({"_id":obj_id})
 
-        if obj is None:
-            rv['code'] = 404
-            rv['message'] = 'not found'
-        else:
+        obj = get(name, id, rv)
+        if obj is not None:
             for k in req_json.keys():
                 obj[k] = req_json[k]
 
             print obj
+            obj_id = obj["_id"]
             del obj["_id"]
 
             obj["lastUpdateDate"] = datetime.datetime.utcnow()
             obj["self"] = "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id)
+            objects = db[name]
             x = objects.update({'_id':obj_id}, {"$set": obj}, upsert=False)
             print "Update result:", 
             print x
@@ -66,6 +85,7 @@ def update(name, id):
     except Exception, e:
         print e
         rv['code'] = 400
+        rv['message'] = str(e)
 
     response.status = rv['code']
     response.location = rv['link']
@@ -74,15 +94,14 @@ def update(name, id):
 @app.post('/ecommerce/<name>/')
 def create(name):
 
-    try:
-        req_json = request.json
-        req_raw = request.body.getvalue()
-        if req_json is None:
-            raise Exception("Empty json or no proper content-type to recognize as json")
-    except Exception, e:
-        response.status = 400
-        status = "syntaxError"
-        return {'code': 400, 'message' : 'Could not parse json' }
+    rv =  {'code': 400, 'message' : 'Unknown' , 'link': '%s/ecommerce/%s/' % (config.get("app", "prefix"), name) }
+
+    if (not json_content_type(request, rv))  or  (not empty_content(request, rv)): return rv
+
+    req_json = request.json
+    if (not Validator(req_json, db, name).valid(rv)): return rv
+
+    req_raw = request.body.getvalue()
 
     try:
         objects = db[name]
@@ -99,16 +118,15 @@ def create(name):
         obj = objects.find_one({"_id":obj_id})
         obj["self"] = "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, str(obj_id))
         x = objects.update({'_id':obj_id}, obj, upsert=False)
-        response.status = 201
-        response.location = '/ecommerce/%s/%s' % (name, obj_id) 
+        rv['code'] = 201
+        rv['message'] = 'created'
+        rv['link'] = '/ecommerce/%s/%s' % (name, obj_id) 
 
     except Exception, e:
-        print e
-        response.status = 400
-        status = "unknownError"
-        return {'code': 400, 'message' : 'Error: %s' % (str(e)) }
+        rv['message']  =  'Error: %s' % (str(e),)
 
-    return {'code': 201, 'message' : 'Created' , 'link': '%s/ecommerce/%s/%s' % (config.get("app", "prefix"), name, obj_id) }
+    response.status = rv['code']
+    return rv
 
 @app.get('/ecommerce/<name>/<id>')
 def get_one(name, id):
@@ -118,23 +136,16 @@ def get_one(name, id):
     rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id) }
 
     try:
-    
-        objects = db[name]
-        obj_id = ObjectId(id)
-        obj = objects.find_one({"_id":obj_id})
-
-        if obj is None:
-            rv['code'] = 404
-            rv['message'] = 'not found'
-        else:
+        obj = get(name, id, rv)
+        if obj is not None:
             obj = sanitize(obj)
             rv['data'] = obj
             rv['code'] = 200
             rv['message'] = 'successful'
 
     except Exception, e:
-        print e
         rv['code'] = 400
+        rv['message'] = str(e)
 
     response.status = rv['code']
     print rv
@@ -179,23 +190,14 @@ def replace(name, id):
 
     rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id) }
 
-    try:
-        req_json = request.json
-        if req_json is None:
-            raise Exception("Empty json or no proper content-type to recognize as json")
-    except Exception, e:
-        response.status = rv['code']
-        return rv
+    if (not json_content_type(request, rv))  or  (not empty_content(request, rv)): return rv
+    req_json = request.json
+    if (not Validator(req_json, db, name).valid(rv)): return rv
 
     try:
-        objects = db[name]
-        obj_id = ObjectId(id)
-        obj = objects.find_one({"_id":obj_id})
+        obj = get(name, id, rv)
 
-        if obj is None:
-            rv['code'] = 404
-            rv['message'] = 'not found'
-        else:
+        if obj is not None:
             try:
                 req_json["creationDate"] = obj['creationDate']
                 req_json["_id"] = obj_id
@@ -222,15 +224,9 @@ def delete(name, id):
     rv = { 'code' : 400, 'message': 'Unknown Error', 'link' : "%s/ecommerce/%s/%s" % (config.get("app", "prefix"), name, id) }
 
     try:
-        objects = db[name]
-        obj_id = ObjectId(id)
-        qry = {"_id":obj_id}
-        obj = objects.find_one(qry)
+        obj = get(name, id, rv)
 
-        if obj is None:
-            rv['code'] = 404
-            rv['message'] = 'not found'
-        else:
+        if obj is not None:
             try:
                 x = objects.remove(qry)
                 rv['code'] = 200
@@ -246,4 +242,3 @@ def delete(name, id):
 
     response.status = rv['code']
     return rv
-
